@@ -1,6 +1,6 @@
 # cyanotypegenerator
 
-a browser-based tool for applying an authentic cyanotype darkroom effect to any photo
+  a browser-based tool for applying an authentic cyanotype darkroom effect to any [photo](https://elizwangwastaken.github.io/cyanotypegenerator/)
 
 # how the processing works
 
