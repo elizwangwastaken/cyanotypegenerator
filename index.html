@@ -1,0 +1,895 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Cyanotype Effect Generator</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Figtree:wght@300;400;500;600;700;800;900&display=swap" rel="stylesheet">
+  <style>
+    :root {
+      --prussian:   #0B2545;
+      --pr-mid:     #1A5296;
+      --pr-light:   #2B396D;
+      --paper:      #EDE8DF;
+      --paper2:     #F5F1EA;
+      --card:       #FFFFFF;
+      --divider:    #E0D9CE;
+      --text:       #1A2744;
+      --muted:      #5E6E8A;
+      --radius:     14px;
+      --btn-dark:   #0b0b0b;
+      --btn-dl:     #2b396d;
+    }
+
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+    body {
+      font-family: 'Figtree', -apple-system, sans-serif;
+      min-height: 100vh;
+      background: linear-gradient(to bottom,
+        #0B0B0B 0%,
+        #0f1630 18%,
+        #2B396D 52%,
+        #8090b8 78%,
+        #E4E4E4 100%
+      );
+      color: var(--text);
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      padding: 40px 16px 60px;
+    }
+
+    /* ── Header ─────────────────────────────────────── */
+    .page-header { text-align: center; margin-bottom: 28px; }
+
+    .page-header h1 {
+      font-size: clamp(28px, 5vw, 52px);
+      font-weight: 400;
+      font-style: normal;
+      color: #ffffff;
+      letter-spacing: 0;
+      line-height: 1.06;
+      margin-bottom: 7px;
+    }
+
+    .page-header p {
+      font-size: 15px;
+      color: rgba(228,228,228,0.7);
+      font-weight: 400;
+    }
+
+    /* ── Card ───────────────────────────────────────── */
+    .card {
+      width: 100%; max-width: 1180px;
+      background: var(--card);
+      border-radius: var(--radius);
+      box-shadow:
+        0 1px 2px rgba(11,37,69,.06),
+        0 8px 32px rgba(11,37,69,.10),
+        0 32px 64px rgba(11,37,69,.06);
+      overflow: hidden;
+    }
+
+    /* ── Workspace ──────────────────────────────────── */
+    .workspace { display: flex; min-height: 560px; }
+
+    /* Image column */
+    .image-col {
+      flex: 1; min-width: 0;
+      padding: 24px;
+      display: flex;
+      flex-direction: column;
+    }
+
+    /* Drop zone */
+    .drop-zone {
+      flex: 1; min-height: 460px;
+      background: #D8E6F5;
+      border-radius: 10px;
+      border: 2px dashed #7AAAD6;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      cursor: pointer;
+      overflow: hidden;
+      transition: border-color .2s, background .2s;
+      gap: 20px;
+      padding: 40px 20px;
+    }
+    .drop-zone:hover    { border-color: var(--pr-mid); background: #CDDFF0; }
+    .drop-zone.dragging { border-color: var(--prussian); background: #C3D7EC; }
+
+    .hint-content { text-align: center; pointer-events: none; }
+
+    .hint-icon {
+      width: 68px; height: 68px;
+      margin: 0 auto 18px;
+      color: var(--pr-mid);
+      opacity: .45;
+      display: block;
+    }
+
+    .hint-content h3 {
+      font-size: 18px; font-weight: 700;
+      color: var(--prussian);
+      margin-bottom: 6px;
+    }
+
+    .hint-content p {
+      font-size: 13px;
+      color: #3A5880;
+    }
+
+    /* Upload button inside drop zone — matches dark button scheme */
+    .btn-upload-center {
+      display: inline-flex; align-items: center; gap: 7px;
+      padding: 11px 28px;
+      background: var(--btn-dark);
+      color: #fff;
+      border: none; border-radius: 8px;
+      font-family: 'Figtree', sans-serif;
+      font-size: 14px; font-weight: 600;
+      cursor: pointer;
+      transition: background .18s, transform .1s;
+      pointer-events: all;
+    }
+    .btn-upload-center:hover  { background: #2a2a2a; }
+    .btn-upload-center:active { transform: scale(.97); }
+
+    /* Image frame (active state) */
+    .image-frame {
+      display: none;
+      position: relative;
+      flex: 1;
+      align-items: flex-start;
+      justify-content: center;
+      background: #000;
+      border-radius: 10px;
+      overflow: hidden;
+      max-height: 680px;
+    }
+
+    #canvas {
+      display: block;
+      max-width: 100%;
+      height: auto;
+      max-height: 680px;
+      width: 100%;
+      object-fit: contain;
+    }
+
+    #compare-canvas {
+      position: absolute;
+      top: 0; left: 0;
+      width: 100%; height: 100%;
+      clip-path: inset(0 100% 0 0);
+      pointer-events: none;
+      object-fit: contain;
+    }
+
+    /* Compare handle */
+    #compare-handle {
+      position: absolute;
+      top: 0; bottom: 0;
+      left: 50%;
+      width: 44px;
+      transform: translateX(-50%);
+      cursor: ew-resize;
+      z-index: 20;
+      display: none;
+      align-items: center;
+      justify-content: center;
+      transition: filter .2s;
+    }
+
+    #compare-handle:hover .ch-pill {
+      transform: scale(1.12);
+      box-shadow: 0 2px 20px rgba(0,0,0,.5), 0 0 0 3px rgba(255,255,255,.25);
+    }
+
+    #compare-handle::before {
+      content: '';
+      position: absolute;
+      top: 0; bottom: 0; left: 50%;
+      width: 2px;
+      background: rgba(255,255,255,.92);
+      box-shadow: 0 0 10px rgba(0,0,0,.5);
+      transform: translateX(-50%);
+    }
+
+    .ch-pill {
+      position: relative; z-index: 1;
+      background: #fff;
+      border-radius: 20px;
+      padding: 7px 9px;
+      display: flex; align-items: center; gap: 3px;
+      box-shadow: 0 2px 14px rgba(0,0,0,.35);
+      color: var(--prussian);
+      user-select: none; pointer-events: none;
+      transition: transform .18s cubic-bezier(.34,1.56,.64,1), box-shadow .18s;
+    }
+
+    .compare-label {
+      position: absolute; top: 10px;
+      font-size: 10px; font-weight: 700;
+      letter-spacing: .12em; text-transform: uppercase;
+      color: rgba(255,255,255,.8);
+      background: rgba(0,0,0,.32);
+      padding: 3px 9px; border-radius: 4px;
+      pointer-events: none; z-index: 15;
+    }
+    .compare-label.left  { left:  10px; }
+    .compare-label.right { right: 10px; }
+
+    /* Developing overlay */
+    .dev-overlay {
+      position: absolute; inset: 0;
+      background: rgba(0,20,40,.72);
+      display: none; flex-direction: column;
+      align-items: center; justify-content: center;
+      gap: 12px; z-index: 30; border-radius: 10px;
+    }
+    .dev-label {
+      color: #A8C4E0; font-size: 12px;
+      font-weight: 600; letter-spacing: .12em;
+      text-transform: uppercase;
+    }
+    .dev-track {
+      width: 160px; height: 3px;
+      background: rgba(168,196,224,.18);
+      border-radius: 2px; overflow: hidden;
+    }
+    .dev-bar {
+      height: 100%; width: 0%;
+      background: #5BA0D8; border-radius: 2px;
+    }
+
+    /* ── Controls column ────────────────────────────── */
+    .controls-col {
+      width: 272px; flex-shrink: 0;
+      border-left: 1px solid var(--divider);
+      display: none; flex-direction: column;
+      overflow-y: auto;
+    }
+    .controls-col.visible { display: flex; }
+
+    .ctrl-section {
+      padding: 20px 20px 18px;
+      border-bottom: 1px solid var(--divider);
+    }
+    .ctrl-section:last-child { border-bottom: none; }
+
+    .ctrl-label {
+      font-size: 10px; font-weight: 700;
+      letter-spacing: .13em; text-transform: uppercase;
+      color: var(--muted); margin-bottom: 14px;
+    }
+
+    .slider-row { margin-bottom: 15px; }
+    .slider-row:last-child { margin-bottom: 0; }
+
+    .slider-head {
+      display: flex; justify-content: space-between;
+      align-items: center; margin-bottom: 6px;
+    }
+
+    .slider-head span:first-child {
+      font-size: 13px; font-weight: 500; color: var(--text);
+    }
+
+    /* Editable number input */
+    .slider-val-input {
+      font-family: 'Figtree', sans-serif;
+      font-size: 11px; font-weight: 700;
+      color: var(--pr-mid);
+      background: #EAF1FF;
+      border: 1px solid transparent;
+      padding: 2px 6px; border-radius: 4px;
+      min-width: 42px; text-align: center;
+      cursor: text;
+      transition: border-color .15s;
+      -moz-appearance: textfield;
+    }
+    .slider-val-input::-webkit-outer-spin-button,
+    .slider-val-input::-webkit-inner-spin-button { -webkit-appearance: none; }
+    .slider-val-input:focus {
+      outline: none;
+      border-color: var(--pr-mid);
+      background: #fff;
+    }
+
+    input[type=range] {
+      -webkit-appearance: none;
+      width: 100%; height: 5px;
+      border-radius: 3px;
+      background: #C4D4EB;
+      outline: none; cursor: pointer;
+    }
+    input[type=range]::-webkit-slider-thumb {
+      -webkit-appearance: none;
+      width: 16px; height: 16px;
+      border-radius: 50%;
+      background: var(--prussian);
+      border: 2px solid #fff;
+      box-shadow: 0 1px 5px rgba(11,37,69,.28);
+      cursor: pointer;
+    }
+
+    /* ── Actions bar ────────────────────────────────── */
+    .actions {
+      display: flex; gap: 9px;
+      justify-content: center; flex-wrap: wrap;
+      padding: 16px 22px;
+      border-top: 1px solid var(--divider);
+      background: var(--paper2);
+    }
+
+    button {
+      display: inline-flex; align-items: center; gap: 6px;
+      padding: 10px 20px; border-radius: 8px;
+      font-family: 'Figtree', sans-serif;
+      font-size: 13px; font-weight: 600;
+      cursor: pointer; border: none;
+      transition: background .18s, opacity .15s, transform .1s;
+      user-select: none;
+    }
+    button:active        { transform: scale(.97); }
+    button:disabled      { opacity: .4; cursor: not-allowed; }
+
+    /* Upload New — #0b0b0b with lighten hover */
+    .btn-upload {
+      background: var(--btn-dark);
+      color: #fff;
+    }
+    .btn-upload:hover:not(:disabled) { background: #2a2a2a; opacity: 1; }
+
+    /* Download Print — #2b396d with lighten hover */
+    .btn-download {
+      background: var(--btn-dl);
+      color: #fff;
+      padding: 10px 26px;
+    }
+    .btn-download:hover:not(:disabled) { background: #3d5096; opacity: 1; }
+
+    .btn-reset {
+      background: transparent; color: var(--muted);
+      border: 1.5px solid var(--divider);
+      font-size: 12px; padding: 9px 14px;
+    }
+    .btn-reset:hover:not(:disabled) { border-color: #c0a0a0; color: #8B3333; opacity: 1; }
+
+    /* ── Info footer ────────────────────────────────── */
+    .info-bar {
+      padding: 14px 22px;
+      border-top: 1px solid var(--divider);
+      display: flex; align-items: flex-start; gap: 9px;
+      background: var(--paper2);
+    }
+    .info-bar svg { color: var(--pr-mid); opacity: .7; flex-shrink: 0; margin-top: 2px; }
+    .info-bar p   { font-size: 13px; color: #3D4F6B; line-height: 1.65; font-weight: 400; }
+
+    /* ── Mobile ─────────────────────────────────────── */
+    @media (max-width: 720px) {
+      body { padding: 16px 10px 36px; }
+      .workspace { flex-direction: column; }
+      .controls-col { width: 100%; border-left: none; border-top: 1px solid var(--divider); }
+      .drop-zone { min-height: 280px; }
+      .actions { padding: 12px; gap: 7px; }
+    }
+
+    #file-input { display: none; }
+  </style>
+  <link rel="icon" type="image/x-icon" href="favicon.ico">
+  <link rel="apple-touch-icon" sizes="180x180" href="apple-touch-icon.png">
+</head>
+<body>
+
+<header class="page-header">
+  <h1>Cyanotype Effect Generator</h1>
+  <p>Create a Digital Cyanotype</p>
+</header>
+
+<div class="card">
+  <div class="workspace">
+
+    <!-- Image column -->
+    <div class="image-col">
+
+      <!-- Empty state -->
+      <div class="drop-zone" id="drop-zone">
+        <div class="hint-content">
+          <svg class="hint-icon" viewBox="0 0 72 72" fill="none" stroke="currentColor" stroke-width="1.3" stroke-linecap="round" stroke-linejoin="round">
+            <line x1="36" y1="64" x2="36" y2="10"/>
+            <path d="M36 54 Q24 46 20 32 Q30 37 36 48"/>
+            <path d="M36 54 Q48 46 52 32 Q42 37 36 48"/>
+            <path d="M36 42 Q25 32 24 18 Q33 25 36 37"/>
+            <path d="M36 42 Q47 32 48 18 Q39 25 36 37"/>
+            <path d="M36 30 Q31 20 32 10 Q36 16 36 25"/>
+            <path d="M36 30 Q41 20 40 10 Q36 16 36 25"/>
+          </svg>
+          <h3>Drop your photo here</h3>
+          <p>JPG, PNG, WEBP &amp; more</p>
+        </div>
+        <button class="btn-upload-center" id="upload-btn-center" type="button">
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M3 16.5v2.25A2.25 2.25 0 005.25 21h13.5A2.25 2.25 0 0021 18.75V16.5M12 3v13.5m0-13.5L7.5 7.5M12 3l4.5 4.5"/></svg>
+          Upload Photo
+        </button>
+      </div>
+
+      <!-- Active image frame -->
+      <div class="image-frame" id="image-frame">
+        <canvas id="canvas"></canvas>
+        <canvas id="compare-canvas"></canvas>
+
+        <div id="compare-handle">
+          <div class="ch-pill">
+            <svg width="18" height="12" viewBox="0 0 18 12" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+              <path d="M5 6H1M3 3L1 6L3 9M13 6H17M15 3L17 6L15 9"/>
+            </svg>
+          </div>
+        </div>
+
+        <div class="compare-label left"  id="label-before">Original</div>
+        <div class="compare-label right" id="label-after">Cyanotype</div>
+
+        <div class="dev-overlay" id="dev-overlay">
+          <div class="dev-label">Developing…</div>
+          <div class="dev-track"><div class="dev-bar" id="dev-bar"></div></div>
+        </div>
+      </div>
+
+    </div><!-- /image-col -->
+
+    <!-- Controls column -->
+    <div class="controls-col" id="controls-col">
+
+      <div class="ctrl-section">
+        <div class="ctrl-label">Exposure</div>
+        <div class="slider-row">
+          <div class="slider-head">
+            <span>Brightness</span>
+            <input type="number" class="slider-val-input" id="brightness-val" value="50" min="10" max="90" aria-label="Brightness value">
+          </div>
+          <input type="range" id="brightness" min="10" max="90" value="50" aria-label="Brightness">
+        </div>
+        <div class="slider-row">
+          <div class="slider-head">
+            <span>Contrast</span>
+            <input type="number" class="slider-val-input" id="contrast-val" value="65" min="10" max="90" aria-label="Contrast value">
+          </div>
+          <input type="range" id="contrast" min="10" max="90" value="65" aria-label="Contrast">
+        </div>
+      </div>
+
+      <div class="ctrl-section">
+        <div class="ctrl-label">Color</div>
+        <div class="slider-row">
+          <div class="slider-head">
+            <span>Toning</span>
+            <input type="number" class="slider-val-input" id="toning-val" value="206" min="190" max="228" aria-label="Toning hue value (blue family)">
+          </div>
+          <input type="range" id="toning" min="190" max="228" value="206" aria-label="Toning — blue to teal range only">
+        </div>
+        <div class="slider-row">
+          <div class="slider-head">
+            <span>Intensity</span>
+            <input type="number" class="slider-val-input" id="intensity-val" value="80" min="30" max="100" aria-label="Color intensity value">
+          </div>
+          <input type="range" id="intensity" min="30" max="100" value="80" aria-label="Color intensity">
+        </div>
+        <div class="slider-row">
+          <div class="slider-head">
+            <span>Depth</span>
+            <input type="number" class="slider-val-input" id="depth-val" value="40" min="0" max="100" aria-label="Multiply depth value">
+          </div>
+          <input type="range" id="depth" min="0" max="100" value="40" aria-label="Multiply depth — richness of darks">
+        </div>
+      </div>
+
+      <div class="ctrl-section">
+        <div class="ctrl-label">Texture</div>
+        <div class="slider-row">
+          <div class="slider-head">
+            <span>Grain</span>
+            <input type="number" class="slider-val-input" id="grain-val" value="22" min="0" max="100" aria-label="Grain amount value">
+          </div>
+          <input type="range" id="grain" min="0" max="100" value="22" aria-label="Film grain amount">
+        </div>
+        <div class="slider-row">
+          <div class="slider-head">
+            <span>Paper</span>
+            <input type="number" class="slider-val-input" id="paper-val" value="25" min="0" max="60" aria-label="Paper texture value">
+          </div>
+          <input type="range" id="paper" min="0" max="60" value="25" aria-label="Paper texture overlay opacity">
+        </div>
+        <div class="slider-row">
+          <div class="slider-head">
+            <span>Vignette</span>
+            <input type="number" class="slider-val-input" id="vignette-val" value="40" min="0" max="100" aria-label="Vignette value">
+          </div>
+          <input type="range" id="vignette" min="0" max="100" value="40" aria-label="Edge vignette">
+        </div>
+      </div>
+
+    </div>
+
+  </div><!-- /workspace -->
+
+  <!-- Actions bar -->
+  <div class="actions" id="actions-bar">
+    <input type="file" id="file-input" accept="image/*">
+    <button class="btn-upload" id="upload-btn" type="button" style="display:none">
+      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M3 16.5v2.25A2.25 2.25 0 005.25 21h13.5A2.25 2.25 0 0021 18.75V16.5M12 3v13.5m0-13.5L7.5 7.5M12 3l4.5 4.5"/></svg>
+      Upload New
+    </button>
+    <button class="btn-download" id="download-btn" type="button" style="display:none">
+      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M3 16.5v2.25A2.25 2.25 0 005.25 21h13.5A2.25 2.25 0 0021 18.75V16.5M7.5 12l4.5 4.5 4.5-4.5M12 3v13.5"/></svg>
+      Download Print
+    </button>
+    <button class="btn-reset" id="reset-btn" type="button" style="display:none">
+      <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M16.023 9.348h4.992v-.001M2.985 19.644v-4.992m0 0h4.992m-4.993 0l3.181 3.183a8.25 8.25 0 0013.803-3.7M4.031 9.865a8.25 8.25 0 0113.803-3.7l3.181 3.182m0-4.991v4.99"/></svg>
+      Reset
+    </button>
+  </div>
+
+  <div class="info-bar">
+    <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><path d="M12 16v-4m0-4h.01"/></svg>
+    <p>Desaturates to greyscale, applies an S-curve to push darks and lift lights, inverts, then screen-blends Prussian blue.</p>
+  </div>
+</div>
+
+<script>
+'use strict';
+
+// ── Default state ──────────────────────────────────────────────
+const DEFAULT_STATE = {
+  brightness: 50, contrast: 65,
+  toning: 206,    intensity: 80, depth: 40,
+  grain: 22,      paper: 25,     vignette: 40
+};
+let state = { ...DEFAULT_STATE };
+
+// slider id → state key → number input id
+const SLIDERS = [
+  { id: 'brightness', key: 'brightness', numId: 'brightness-val' },
+  { id: 'contrast',   key: 'contrast',   numId: 'contrast-val'   },
+  { id: 'toning',     key: 'toning',     numId: 'toning-val'     },
+  { id: 'intensity',  key: 'intensity',  numId: 'intensity-val'  },
+  { id: 'depth',      key: 'depth',      numId: 'depth-val'      },
+  { id: 'grain',      key: 'grain',      numId: 'grain-val'      },
+  { id: 'paper',      key: 'paper',      numId: 'paper-val'      },
+  { id: 'vignette',   key: 'vignette',   numId: 'vignette-val'   },
+];
+
+let currentImage  = null;
+let processedData = null;
+let renderTimer   = null;
+let isDragging    = false;
+const DEBOUNCE    = 55;
+
+// ── DOM refs ───────────────────────────────────────────────────
+const dropZone         = document.getElementById('drop-zone');
+const imageFrame       = document.getElementById('image-frame');
+const canvas           = document.getElementById('canvas');
+const ctx              = canvas.getContext('2d', { willReadFrequently: true });
+const compareCanvas    = document.getElementById('compare-canvas');
+const compareCtx       = compareCanvas.getContext('2d');
+const compareHandle    = document.getElementById('compare-handle');
+const labelBefore      = document.getElementById('label-before');
+const labelAfter       = document.getElementById('label-after');
+const devOverlay       = document.getElementById('dev-overlay');
+const devBar           = document.getElementById('dev-bar');
+const fileInput        = document.getElementById('file-input');
+const ctrlsCol         = document.getElementById('controls-col');
+const uploadBtnCenter  = document.getElementById('upload-btn-center');
+const uploadBtn        = document.getElementById('upload-btn');
+const downloadBtn      = document.getElementById('download-btn');
+const resetBtn         = document.getElementById('reset-btn');
+
+// ── Slider + number input wiring (bidirectional) ───────────────
+SLIDERS.forEach(({ id, key, numId }) => {
+  const range = document.getElementById(id);
+  const num   = document.getElementById(numId);
+
+  range.addEventListener('input', () => {
+    state[key]     = +range.value;
+    num.value      = range.value;
+    scheduleRender();
+  });
+
+  num.addEventListener('change', () => {
+    const clamped  = Math.max(+range.min, Math.min(+range.max, +num.value || 0));
+    num.value      = clamped;
+    range.value    = clamped;
+    state[key]     = clamped;
+    scheduleRender();
+  });
+  num.addEventListener('keydown', e => { if (e.key === 'Enter') num.blur(); });
+});
+
+function syncUI() {
+  SLIDERS.forEach(({ id, key, numId }) => {
+    document.getElementById(id).value    = state[key];
+    document.getElementById(numId).value = state[key];
+  });
+}
+
+// ── File handling ──────────────────────────────────────────────
+uploadBtnCenter.addEventListener('click', e => { e.stopPropagation(); fileInput.click(); });
+uploadBtn.addEventListener('click',       ()  => fileInput.click());
+fileInput.addEventListener('change',      e   => loadFile(e.target.files[0]));
+
+dropZone.addEventListener('click',    () => fileInput.click());
+dropZone.addEventListener('dragover', e  => { e.preventDefault(); dropZone.classList.add('dragging'); });
+dropZone.addEventListener('dragleave',()  => dropZone.classList.remove('dragging'));
+dropZone.addEventListener('drop',     e  => {
+  e.preventDefault();
+  dropZone.classList.remove('dragging');
+  const f = e.dataTransfer.files[0];
+  if (f && f.type.startsWith('image/')) loadFile(f);
+});
+
+function loadFile(file) {
+  if (!file) return;
+  const reader = new FileReader();
+  reader.onload = e => {
+    const img = new Image();
+    img.onload = () => {
+      currentImage = img;
+      showImage(true);
+      applyEffect(img);
+    };
+    img.src = e.target.result;
+  };
+  reader.readAsDataURL(file);
+  fileInput.value = '';
+}
+
+function showImage(on) {
+  dropZone.style.display     = on ? 'none' : 'flex';
+  imageFrame.style.display   = on ? 'flex' : 'none';
+  ctrlsCol.classList.toggle('visible', on);
+  uploadBtn.style.display    = on ? 'inline-flex' : 'none';
+  downloadBtn.style.display  = on ? 'inline-flex' : 'none';
+  resetBtn.style.display     = on ? 'inline-flex' : 'none';
+  if (!on) {
+    compareHandle.style.display  = 'none';
+    labelBefore.style.display    = 'none';
+    labelAfter.style.display     = 'none';
+    compareCanvas.style.clipPath = 'inset(0 100% 0 0)';
+  }
+}
+
+// ── Effect pipeline ────────────────────────────────────────────
+function scheduleRender() {
+  if (!currentImage) return;
+  clearTimeout(renderTimer);
+  renderTimer = setTimeout(() => applyEffect(currentImage), DEBOUNCE);
+}
+
+function buildSCurveLUT(contrast, brightness) {
+  const lut = new Uint8Array(256);
+  const str   = (contrast - 10) / 80;
+  const bOff  = (brightness - 50) * 0.55;
+
+  for (let i = 0; i < 256; i++) {
+    let v = i / 255;
+    const s = str * 3.5;
+    const c = 1 / (1 + Math.exp(-s * (v - 0.5)));
+    const c0 = 1 / (1 + Math.exp(-s * (-0.5)));
+    const c1 = 1 / (1 + Math.exp(-s *  0.5));
+    v = (c - c0) / (c1 - c0);
+
+    lut[i] = Math.max(0, Math.min(255, Math.round(v * 255 + bOff)));
+  }
+  return lut;
+}
+
+function applyEffect(img) {
+  showDev(true);
+
+  setTimeout(() => {
+    const W = img.width, H = img.height;
+    canvas.width  = W; canvas.height = H;
+    ctx.drawImage(img, 0, 0);
+
+    const { brightness, contrast, toning, intensity, depth, grain, paper, vignette } = state;
+    const scLUT = buildSCurveLUT(contrast, brightness);
+
+    const hueShift = (toning - 206) / 206;
+    const cyanR = Math.round(48  + hueShift * 20);
+    const cyanG = Math.round(83  - hueShift * 8);
+    const cyanB = Math.round(124 + hueShift * 14);
+
+    const cyanAmt = 0.5 + (intensity / 100) * 0.5;
+    const multAmt = depth / 100 * 0.55;
+
+    const id = ctx.getImageData(0, 0, W, H);
+    const px = id.data;
+
+    for (let i = 0; i < px.length; i += 4) {
+      const lum = (0.299 * px[i] + 0.587 * px[i+1] + 0.114 * px[i+2]) | 0;
+      let g = scLUT[lum];
+      g = 255 - g;
+
+      const gf = g / 255;
+
+      const cr = cyanR / 255, cg = cyanG / 255, cb = cyanB / 255;
+      let sr = 1 - (1 - gf) * (1 - cr);
+      let sg = 1 - (1 - gf) * (1 - cg);
+      let sb = 1 - (1 - gf) * (1 - cb);
+
+      sr = gf * (1 - cyanAmt) + sr * cyanAmt;
+      sg = gf * (1 - cyanAmt) + sg * cyanAmt;
+      sb = gf * (1 - cyanAmt) + sb * cyanAmt;
+
+      if (multAmt > 0) {
+        const mr = sr * sr;
+        const mg = sg * sg;
+        const mb = sb * sb;
+        sr = sr * (1 - multAmt) + mr * multAmt;
+        sg = sg * (1 - multAmt) + mg * multAmt;
+        sb = sb * (1 - multAmt) + mb * multAmt;
+      }
+
+      px[i]   = Math.max(0, Math.min(255, (sr * 255 + .5) | 0));
+      px[i+1] = Math.max(0, Math.min(255, (sg * 255 + .5) | 0));
+      px[i+2] = Math.max(0, Math.min(255, (sb * 255 + .5) | 0));
+    }
+
+    ctx.putImageData(id, 0, 0);
+
+    if (grain > 0) {
+      const opacity = grain / 100 * 0.12;
+      const nc  = document.createElement('canvas');
+      nc.width  = W; nc.height = H;
+      const nctx = nc.getContext('2d');
+      const nd  = nctx.createImageData(W, H);
+      const np  = nd.data;
+      for (let i = 0; i < np.length; i += 4) {
+        const v = ((Math.random() + Math.random() + Math.random()) / 3 * 255) | 0;
+        np[i] = np[i+1] = np[i+2] = v;
+        np[i+3] = 255;
+      }
+      nctx.putImageData(nd, 0, 0);
+      ctx.save();
+      ctx.globalCompositeOperation = 'overlay';
+      ctx.globalAlpha = opacity;
+      ctx.drawImage(nc, 0, 0);
+      ctx.restore();
+    }
+
+    if (paper > 0) {
+      const opacity = paper / 60 * 0.22;
+      const pc  = document.createElement('canvas');
+      pc.width  = W; pc.height = H;
+      const pctx = pc.getContext('2d');
+      const pd  = pctx.createImageData(W, H);
+      const pp  = pd.data;
+      for (let i = 0; i < pp.length; i += 4) {
+        const lo  = Math.random() * 0.4 + 0.6;
+        const hi  = Math.random() * 0.15 + 0.85;
+        const v   = ((lo * hi) * 255 + .5) | 0;
+        pp[i] = pp[i+1] = pp[i+2] = v;
+        pp[i+3] = 255;
+      }
+      pctx.putImageData(pd, 0, 0);
+      ctx.save();
+      ctx.globalCompositeOperation = 'multiply';
+      ctx.globalAlpha = opacity;
+      ctx.drawImage(pc, 0, 0);
+      ctx.restore();
+    }
+
+    if (vignette > 0) {
+      const a   = vignette / 100;
+      ctx.save();
+      ctx.globalCompositeOperation = 'multiply';
+      const grd = ctx.createRadialGradient(
+        W * 0.50, H * 0.48, Math.min(W, H) * 0.15,
+        W * 0.52, H * 0.52, Math.max(W, H) * 0.88
+      );
+      grd.addColorStop(0,    'rgba(255,255,255,1)');
+      grd.addColorStop(0.42, `rgba(210,225,240,${a * 0.12})`);
+      grd.addColorStop(0.70, `rgba(50,90,140,${a * 0.50})`);
+      grd.addColorStop(1,    `rgba(0,15,35,${a * 0.94})`);
+      ctx.fillStyle = grd;
+      ctx.fillRect(0, 0, W, H);
+      ctx.restore();
+    }
+
+    processedData = ctx.getImageData(0, 0, W, H);
+
+    compareCanvas.width  = W;
+    compareCanvas.height = H;
+    compareCtx.drawImage(img, 0, 0, W, H);
+
+    showDev(false);
+    activateCompare();
+  }, 30);
+}
+
+// ── Developing bar ─────────────────────────────────────────────
+function showDev(on) {
+  if (on) {
+    devOverlay.style.display = 'flex';
+    devBar.style.transition  = '';
+    devBar.style.width       = '0%';
+    requestAnimationFrame(() => {
+      devBar.style.transition = 'width .9s ease-out';
+      devBar.style.width      = '78%';
+    });
+  } else {
+    devBar.style.transition  = 'width .12s';
+    devBar.style.width       = '100%';
+    setTimeout(() => {
+      devOverlay.style.display = 'none';
+      devBar.style.transition  = '';
+      devBar.style.width       = '0%';
+    }, 160);
+  }
+}
+
+// ── Compare slider ─────────────────────────────────────────────
+function activateCompare() {
+  compareHandle.style.display  = 'flex';
+  labelBefore.style.display    = 'block';
+  labelAfter.style.display     = 'block';
+  compareHandle.style.left     = '50%';
+  compareCanvas.style.clipPath = 'inset(0 50% 0 0)';
+}
+
+function setComparePos(pct) {
+  pct = Math.max(0.02, Math.min(0.98, pct));
+  compareHandle.style.left     = (pct * 100) + '%';
+  compareCanvas.style.clipPath = `inset(0 ${(1 - pct) * 100}% 0 0)`;
+}
+
+compareHandle.addEventListener('mousedown',  e => { isDragging = true; e.preventDefault(); });
+compareHandle.addEventListener('touchstart', e => { isDragging = true; e.preventDefault(); }, { passive: false });
+
+document.addEventListener('mousemove', e => {
+  if (!isDragging) return;
+  const r = imageFrame.getBoundingClientRect();
+  setComparePos((e.clientX - r.left) / r.width);
+});
+document.addEventListener('touchmove', e => {
+  if (!isDragging) return;
+  const r = imageFrame.getBoundingClientRect();
+  setComparePos((e.touches[0].clientX - r.left) / r.width);
+}, { passive: false });
+document.addEventListener('mouseup',  () => { isDragging = false; });
+document.addEventListener('touchend', () => { isDragging = false; });
+
+imageFrame.addEventListener('click', e => {
+  if (!compareHandle.style.display || compareHandle.style.display === 'none') return;
+  if (e.target === compareHandle || compareHandle.contains(e.target)) return;
+  const r = imageFrame.getBoundingClientRect();
+  setComparePos((e.clientX - r.left) / r.width);
+});
+
+// ── Download ───────────────────────────────────────────────────
+downloadBtn.addEventListener('click', () => {
+  if (processedData) ctx.putImageData(processedData, 0, 0);
+  const a  = document.createElement('a');
+  a.download = 'cyanotype-print.png';
+  a.href     = canvas.toDataURL('image/png');
+  a.click();
+});
+
+// ── Reset ──────────────────────────────────────────────────────
+resetBtn.addEventListener('click', () => {
+  if (!confirm('Reset photo and all settings?')) return;
+  currentImage = processedData = null;
+  ctx.clearRect(0, 0, canvas.width, canvas.height);
+  showImage(false);
+  state = { ...DEFAULT_STATE };
+  syncUI();
+});
+</script>
+</body>
+</html>
